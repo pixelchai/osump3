@@ -11,10 +11,7 @@ namespace osump3
     {
         public static void Main(string[] args)
         {
-            Console.WriteLine(Utils.GetSongDir());
-
-            OsuFile osu = new OsuFile(new System.IO.FileInfo(@"D:\Users\syanochara\AppData\Local\osu!\Songs\59936 Hanazawa Kana ft Snoop Dogg - Weed Circulation\Hanazawa Kana ft. Snoop Dogg - Weed Circulation (Milkshake) [and those roll the best].osu")).Parse();
-            Console.WriteLine(osu);
+            new Exporter(Utils.GetSongDir()).Export();
         }
     }
 }
