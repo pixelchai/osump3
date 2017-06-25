@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -12,8 +13,8 @@ namespace osump3
     {
         public enum Section { Unkown, General, Editor, Metadata, Difficulty, Events, TimingPoints, Colours, HitObjects }
 
-        public static Regex SectionRegex = new Regex("\\[(" + Utils.OSU_SECTIONS + "+)\\]\\n(([^\\n]+)(\\s|$))+");
-        public FileInfo File = null;
+        public static Regex SectionRegex = new Regex(@"\[("+Utils.OSU_SECTIONS+@")\](\r\n?|\n)(([^\n\r]+)((\r\n?|\n)|$))+");
+        public FileInfo File;
 
         public OsuFile(FileInfo file)
         {
@@ -33,9 +34,17 @@ namespace osump3
 
             foreach (Match section in SectionRegex.Matches(raw))
             {
-                this.ParseSection(section.Value);
+                if (!this.ParseSection(section.Value))
+                {
+                    Console.WriteLine("Error parsing section: " + section.Groups[1]);
+                }
             }
             return this;
+        }
+
+        private Char ReadNot(this StringReader sr, char expect)
+        {
+            if((Char)sr.Read()!=expect)
         }
 
         private bool ParseSection(string section)
@@ -58,6 +67,8 @@ namespace osump3
             }
         }
 
+        public FileInfo AudioFilename;
+
         private bool ParseGeneral(StringReader sr)
         {
             while (true)
@@ -65,20 +76,37 @@ namespace osump3
                 StringBuilder nraw = new StringBuilder();
                 char c;
                 while ((c = (Char)sr.Read()) != ':') nraw.Append(c);
-
+                if (nraw != null)
+                {
+                    switch (nraw.ToString().Trim())
+                    {
+                        case "AudioFilename":
+                            AudioFilename = new FileInfo(this.File.Directory.FullName + @"\" + sr.ReadLine());
+                            break;
+                        default:
+                            Console.WriteLine("Cannot handle: " + nraw.ToString().Trim());
+                            sr.ReadLine();
+                            break;
+                    }
+                }
+                else { break; }
             }
+            return true;
         }
 
         private bool ParseMetadata(StringReader sr)
         {
+            return false;
         }
 
         private bool ParseDifficulty(StringReader sr)
         {
+            return false;
         }
 
         private bool ParseEvents(StringReader sr)
         {
+            return false;
         }
     }
 }
