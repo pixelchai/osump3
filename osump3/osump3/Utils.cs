@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.AccessControl;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -19,11 +20,9 @@ namespace osump3
         public static bool AsciiOnly = false;
         public static OsuFile.ModeType Modes = OsuFile.ModeType.Osu | OsuFile.ModeType.Taiko | OsuFile.ModeType.CatchTheBeat | OsuFile.ModeType.OsuMania;
         public static ImageResolveMode ResolveMode = ImageResolveMode.First;
+        private static string[] SkipDrives = new string[] { @"C:\" };
 
-        public static void Quit(string message="")
-        {
-            //TODO
-        }
+        public static string SongDir = null;
 
         internal static Char ReadNot(this StringReader sr, char not)
         {
@@ -82,6 +81,130 @@ namespace osump3
         internal static T ReadEnum<T>(this StringReader sr, uint look = 0)
         {
             return (T)(Object)sr.ReadInt(look);
+        }
+
+
+        internal static bool CanRead(string d)
+        {
+            try
+            {
+                var readAllow = false;
+                var readDeny = false;
+                var accessControlList = Directory.GetAccessControl(d);
+                if (accessControlList == null)
+                    return false;
+                var accessRules = accessControlList.GetAccessRules(true, true, typeof(System.Security.Principal.SecurityIdentifier));
+                if (accessRules == null)
+                    return false;
+
+                foreach (FileSystemAccessRule rule in accessRules)
+                {
+                    if ((FileSystemRights.Read & rule.FileSystemRights) != FileSystemRights.Read) continue;
+
+                    if (rule.AccessControlType == AccessControlType.Allow)
+                        readAllow = true;
+                    else if (rule.AccessControlType == AccessControlType.Deny)
+                        readDeny = true;
+                }
+
+                return readAllow && !readDeny;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
+        }
+
+        internal static bool CanRead(this DirectoryInfo d)
+        {
+            return CanRead(d.FullName);
+        }
+
+        public static string GetSongDir()
+        {
+            if (SongDir != null)
+            {
+                if (!new DirectoryInfo(SongDir).Exists) return null;
+                return SongDir;
+            }
+
+            string ret;
+
+            //method 1
+            DirectoryInfo appData = new DirectoryInfo(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+            bool cont = false;
+            foreach (string drive in SkipDrives)
+            {
+                if (appData.FullName.StartsWith(drive))
+                {
+                    cont = true;
+                    break;
+                }
+            }
+            if (!cont)
+            {
+                if ((ret = GetSongDir(appData)) != null)
+                {
+                    SongDir = ret;
+                    return ret;
+                }
+            }
+
+            //method 2 - search all drives
+            foreach (DriveInfo drive in GetDrives())
+            {
+                try
+                {
+                    DirectoryInfo usrDir = new DirectoryInfo(drive.Name + "Users");
+                    if (usrDir.Exists)
+                    {
+                        foreach (DirectoryInfo d in usrDir.GetDirectories())
+                        {
+                            if ((ret = GetSongDir(new DirectoryInfo(d.FullName + @"\AppData\Local"))) != null)
+                            {
+                                SongDir = ret;
+                                return ret;
+                            }
+                        }
+                    }
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+
+            return null;
+        }
+
+        private static string GetSongDir(DirectoryInfo appData)
+        {
+            try
+            {
+                if (!appData.Exists) return null;
+                string d = appData.FullName + @"\osu!\Songs";
+                if (Directory.Exists(d)) return d;
+            }
+            catch { }
+            return null;
+        }
+
+        private static List<DriveInfo> GetDrives()
+        {
+            List<DriveInfo> fixedready = new List<DriveInfo>();
+            List<DriveInfo> ready = new List<DriveInfo>();
+            foreach (DriveInfo drive in DriveInfo.GetDrives())
+            {
+                if (SkipDrives.Contains(drive.Name)) continue;
+                if (drive.IsReady)
+                {
+                    if (drive.DriveType == DriveType.Fixed) fixedready.Add(drive);
+                    else ready.Add(drive);
+                }
+            }
+
+            List<DriveInfo> ret = new List<DriveInfo>();
+            ret.AddRange(fixedready);
+            ret.AddRange(ready);
+            return ret;
         }
     }
 }
